@@ -1,0 +1,9 @@
+# Data and training outputs are never committed.
+IndustryBiscuit*/
+data/
+*.pth
+*.h5
+*.keras
+.ipynb_checkpoints/
+__pycache__/
+.DS_Store

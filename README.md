@@ -1,451 +1,113 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.png">
+  <img alt="The University of Chicago, MS in Applied Data Science. ADSP 32014 course project." src=".github/assets/banner-light.png">
+</picture>
+
 # Industrial Biscuit Defect Detection
 
-## Table of Contents
+> **Example project from Spring 2025.** This is a copy of [mvemuri-22/Industry-Biscuit-Anomaly-Detection](https://github.com/mvemuri-22/Industry-Biscuit-Anomaly-Detection), shown with the authors' work and commit history intact. Their own write-up is [REPORT.md](REPORT.md). Course staff wrote this README and made the edits listed under [Changes by course staff](#changes-by-course-staff), including the section on [what to learn from this project](#what-to-learn-from-this-project).
 
-1. [Introduction](#introduction)
-2. [Dataset](#dataset)
-3. [Data Preparation](#data-preparation)
-4. [Model Training](#model-training)
-    * [Autoencoder](#autoencoder)
-    * [Variational Autoencoder (VAE)](#variational-autoencoder-vae)
-    * [Generative Adversarial Network (GAN)](#generative-adversarial-network-gan)
-    * [Vision Transformer (ViT)](#vision-transformer-vit-vae)
-5. [Final Model](#final-model-and-results)
-6. [Future Work](#future-work)
+On a biscuit production line, can a model that has only ever seen good biscuits flag the bad ones, and can it tell a harmless misshapen biscuit from one with a screw baked into it? The team trained four generative models on photographs of defect-free Tarallini biscuits and scored new biscuits by how badly each model reconstructs them.
 
-## Introduction
+## Summary
 
-This project aims to develop a robust anomaly detection system for industrial biscuit quality control. We will explore and implement various deep learning models, including Variational Autoencoders (VAEs) and Generative Adversarial Networks (GANs), to identify defective biscuits based on their visual appearance. The primary goal is to distinguish between non-defective ("ok") and defective ("nok") biscuits by learning the distribution of normal biscuit features. This is particularly crucial in industrial settings where the cost of a false negative (selling a defective product) can be significantly higher than a false positive (discarding a non-defective product). Selling defective biscuits can lead to customer dissatisfaction, brand damage, recalls, and in cases of safety concerns (e.g., unknown foreign objects or harmful colorations), severe health risks and legal liabilities. Therefore, our anomaly detection system prioritizes minimizing the risk of defective products reaching the market. This README provides an overview of our methodology, the models we plan to use, the dataset, and our approach to data preparation, model training, and evaluation.
+The data is a public Kaggle set of 1,225 biscuit photographs, each captured four times at 90-degree rotations, labeled defect-free or defective with three defect types: incomplete shape, foreign object, and color. The team split the data by groups of four rotations so the same biscuit never appears on both sides of a split, then trained four models on defect-free images only: a convolutional autoencoder as the non-Bayesian baseline, a variational autoencoder, a deep convolutional GAN scored by optimizing a latent code to reconstruct each test image, and a VAE whose encoder is a pretrained Vision Transformer. Reconstruction error above a threshold tuned on validation data marks a biscuit as defective. The GAN scored best in the authors' report, with precision and recall both around 0.85 to 0.92. K-means on the VAE's latent codes separated the incomplete-shape defects, which a bakery might still sell, from the foreign-object and color defects, which it must not. The Vision Transformer VAE reconstructed everything well, including the defects, and so failed at the task, which the authors explain correctly.
 
-## Dataset
+## Team and contributions
 
-We will be utilizing a specialized dataset comprising **1,225** images of Tarallini biscuits sourced from an industrial plant. The data is augmented such that each sample rotated by 90° for three times, so the comprehensive augmented dataset contains 4900 captures in total. Each image has a resolution of **256x256** pixels. The dataset categorizes biscuits into two main types: non-defective and defective. Within the defective biscuits: there are 3 types of defects: **"not complete," "strange object," and "color defect."** This dataset closely mimics real-world quality control scenarios, making it highly suitable for developing an effective defect detection model in an industrial setting.
+Team "Turing Tested", Spring 2025.
 
-Below are some example images from the training dataset for both non-defective and defective cookies:
+- **Alex Lee** ([@alexlee0422](https://github.com/alexlee0422)): the exploratory analysis, the Keras VAE, threshold tuning, the defect-type clustering, and much of the write-up.
+- **Zimeng Huang** ([@Andy-hzm](https://github.com/Andy-hzm)): the Vision Transformer VAE and its analysis, and the write-up's equations.
+- **Manas Vemuri** ([@mvemuri-22](https://github.com/mvemuri-22)): the repository, the data download and folder preparation, the convolutional autoencoder and the first VAE attempt.
+- **Rithik Alluri**: the DCGAN notebook, committed to the repository by a teammate.
 
-<img width="1140" alt="Screenshot 2025-05-28 at 1 11 44 PM" src="https://github.com/user-attachments/assets/2b4ffba5-31d6-443b-801a-8692a58fa5d4" />
+The project ran from May 19 to 28, 2025. The attributions follow the [commit history](https://github.com/uchicago-dsi-bayesianml/sp25-biscuit-anomaly-detection/commits/main).
 
-<img width="1140" alt="Screenshot 2025-05-28 at 1 12 17 PM" src="https://github.com/user-attachments/assets/2b4c7578-db67-4155-8387-33e42b1de8b6" />
+## Getting started
 
-For more details, the dataset can be accessed at: [Industry Biscuit Cookie Dataset](https://www.kaggle.com/datasets/imonbilk/industry-biscuit-cookie-dataset/data)
+There is no environment file. The Keras notebooks need TensorFlow, scikit-learn, matplotlib, Pillow and kagglehub; the PyTorch notebooks need torch, torchvision, transformers and scikit-learn, and were run in Google Colab on a GPU with data on Google Drive. Paths inside the notebooks point at those locations and need editing.
 
-## Data Preparation
+| Notebook | What it does |
+|---|---|
+| `Final Project VAE Model.ipynb` | Downloads the dataset with kagglehub and arranges it into train, validation and test folders with `ok` and `nok` subfolders; shows examples; an early VAE attempt that did not work (see below). |
+| `Final Project Autoencoder.ipynb` | The convolutional autoencoder baseline at 256×256, with threshold selection and a classification report. |
+| `EDA and VAE.ipynb` | Exploration, the rotation-group split, the Keras VAE at 64×64 trained on defect-free images, thresholding and evaluation. |
+| `EDA, VAE and Clustering.ipynb` | The same, extended with K-means on the VAE latents to separate defect types, and a second VAE trained on defects only. |
+| `DCGAN_biscuit_anomaly.ipynb` | The DCGAN at 64×64, latent-optimization anomaly scores, ROC analysis and the threshold from Youden's J. |
+| `ViTVAE.ipynb` | The Vision Transformer VAE at 224×224, its training curve, thresholding, reconstructions and a t-SNE of the latent space. |
 
-The data preparation phase involves several crucial steps to ensure the images are in a suitable format for model training.
+## Data
 
-1. The dataset was obtained by running the provided code/notebook from the Kaggle link. It is organized into `train`, `test`, and `val` (validation) folders. Within each of these folders, there are subfolders named `ok` (for non-defective biscuits) and `nok` (for defective biscuits), allowing for clear separation of normal and anomalous samples.
-2. Loading Images: Images are loaded from the specified directories (`train/ok` and `train/nok`). We wrote `preprocess_image` function which handles loading, resizing, and normalization.  
-3. Resizing and Normalization: All images are resized to a uniform dimension of `256x256` pixels and normalized to a pixel range of by dividing by 255\. This standardization is critical for consistent model input.  
-4. **Data Splitting**: To prevent data leakage, especially since each cookie is captured from 4 different angles (resulting in 4 consecutive images of the same cookie rotated), the splitting process is performed by grouping images in sets of 4 before distributing the training set images into training and validation sets. The test set is kept as is from the data extraction output given by the data source. All datasets (`X_train`, `X_val`, `X_test`) are converted to `float32` and normalized to the range.
+Data files are never committed to this repository.
 
-## **Model Training**
+- **Source:** the [Industry Biscuit (Cookie) dataset](https://www.kaggle.com/datasets/imonbilk/industry-biscuit-cookie-dataset) on Kaggle, by Šimon Bilík: 1,225 photographs of Tarallini biscuits from an industrial line, 474 defect-free and 751 defective across the three defect types, each provided at four rotations for 4,900 images of 256×256 pixels.
+- **Terms:** GNU LGPL 3.0, as declared on Kaggle.
+- **How to get it:** the first notebook downloads it with kagglehub, which needs a Kaggle account and API token.
+- **Where to put it:** the notebooks expect `train/`, `val/` and `test/` folders with `ok` and `nok` subfolders; the first notebook builds them.
 
-### **Autoencoder**
+## Project structure
 
-To set a baseline with a non-bayesian technique we used a convolutional autoencoder to detect anomalies. We train this model on images of normal biscuits to learn how to compact the representation of a real cookie. For predictions we then flag images where the reconstruction error is high as a potential anomaly. 
+| Path | Contents |
+|---|---|
+| `REPORT.md` | The authors' write-up: dataset, preparation, each model with code and results, the final comparison, future work. |
+| The six notebooks above | All code; there are no modules or scripts. |
 
-```python
-from tensorflow.keras import layers, models
+## Method
 
-def build_autoencoder(input_shape):
-    input_img = layers.Input(shape=input_shape)
+**Framing.** Every model is trained on defect-free biscuits only and scored on reconstruction error. The threshold is chosen on a validation split, by F1 for the autoencoder and VAE and by Youden's J on the ROC curve for the GAN.
 
-    # Encoder
-    x = layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
-    x = layers.MaxPooling2D((2, 2), padding='same')(x)
-    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(x)
-    x = layers.MaxPooling2D((2, 2), padding='same')(x)
-    x = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(x)
-    encoded = layers.MaxPooling2D((2, 2), padding='same')(x)  # Compressed representation
+**Autoencoder.** Three convolution and pooling blocks down, three convolution and upsampling blocks back, mean squared error, 256×256 input.
 
-    # Decoder
-    x = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(encoded)
-    x = layers.UpSampling2D((2, 2))(x)
-    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(x)
-    x = layers.UpSampling2D((2, 2))(x)
-    x = layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-    x = layers.UpSampling2D((2, 2))(x)
-    decoded = layers.Conv2D(3, (3, 3), activation='sigmoid', padding='same')(x)
+**Variational autoencoder.** Three convolutions to a 64-unit dense layer, then a mean and a log-variance for the latent code, the reparameterization trick, and a mirrored transposed-convolution decoder; binary cross-entropy reconstruction plus the KL term; 64×64 input, trained for 50 epochs on defect-free images. K-means with three clusters on the latent means of the test biscuits the VAE flagged.
 
-    autoencoder = models.Model(input_img, decoded)
-    autoencoder.compile(optimizer='adam', loss='mse')
-    return autoencoder
-```
+**DCGAN with latent optimization.** The generator and discriminator are the DCGAN implementation from Erik Linder-Norén's [PyTorch-GAN](https://github.com/eriklindernoren/PyTorch-GAN) repository, MIT licensed, with 34 of its 38 substantive lines reproduced verbatim; the authors' write-up presents it as their own architecture, and course staff added this credit. The GAN is trained on defect-free images for 100 epochs. The anomaly score follows the approach of AnoGAN (Schlegl et al., 2017): for each test image, a latent code is optimized for 200 Adam steps to make the generator reproduce the image, and the remaining mean squared error is the score. Scoring ran on a balanced set of 380 defect-free and 380 defective test images.
 
+**Vision Transformer VAE.** A pretrained `google/vit-base-patch16-224` encoder, its patch embeddings split into a mean and log-variance map, and a four-layer transposed-convolution decoder; 100 epochs at 224×224. The class carries several unused parameters that suggest it was adapted from a template; course staff could not identify the source.
 
-When running this across our test set we are able to get a test accuracy of 81% with a recall of 56% on anomalies. During the development process we adjusted thresholds to prioritize recall of anomalies, but this came at the cost of wasting too many good cookies. As a result we did a closer examination of the missed anomalies.
+### What is Bayesian here
 
-             precision    recall  f1-score   support
+The VAE is the Bayesian piece. Its encoder is an amortized approximate posterior over a latent code, its decoder is the likelihood, and the loss is the negative evidence lower bound: a reconstruction term plus the KL divergence from a standard normal prior. Training it on defect-free biscuits only means the bound is tight for normal biscuits and loose for anything else, so reconstruction error is a crude stand-in for the model's evidence against a new image. The KL term is also what makes the latent space usable for the clustering: the codes of flagged biscuits are organized enough that incomplete shapes land together. The autoencoder is the same idea without the prior or the probabilistic encoder, which is why it is the right baseline. The GAN and the Vision Transformer VAE are generative models too, but the project uses them as reconstruction engines rather than as probability models: no likelihood or posterior is read off either.
 
-           0       0.69      0.96      0.80       200
+What the project doesn't do is use the VAE's uncertainty. The reconstruction probability, averaging the decoder's likelihood over posterior samples of the code, is the Bayesian anomaly score for a VAE and would have used the model as a model.
 
-           1       0.93      0.56      0.70       200
+## Results
 
-    accuracy                           0.76       400
+As reported in the authors' write-up, on 400 test images for the first two models and the 760-image balanced set for the GAN.
 
-*Examination of Errors*
+| Model | Accuracy | Precision | Recall |
+|---|---|---|---|
+| Autoencoder (256×256) | 0.76 | 0.93 | 0.56 |
+| VAE (64×64) | 0.79 | 0.72 | 0.95 |
+| DCGAN with latent optimization (64×64) | 0.89 | 0.92 | 0.85 |
+| Vision Transformer VAE (224×224) | not reported | 0.49 | 0.96 |
 
-As discussed above, our dataset contains three kinds of anomalies: colors, shape, and defects. The two we are most concerned about from a business perspective are colors and defects. There are biscuits in the dataset that have red and black coloring that could indicate a safety hazard. For defects we have some cookies with a nail or metal screw in it that could be very dangerous.
+Precision and recall are for the defective class. The authors' error analysis shows the autoencoder catching the foreign objects and colored biscuits and missing the misshapen ones, and the VAE's clustering putting 44 of 48 incomplete-shape biscuits in one cluster. See the [caveats below](#what-to-learn-from-this-project) on where these numbers come from.
 
-When we look at our true positives , we do a good job catching these kinds of dangerous anomalies.
+## What to learn from this project
 
-**True Positive Images:**
+Course staff added this section. The application is well chosen and the analysis around the models is the team's own; the points below are about attribution and about numbers.
 
-<img width="1516" alt="Screenshot 2025-05-28 at 1 14 24 PM" src="https://github.com/user-attachments/assets/2e4d0582-e6cd-4c6b-aacd-506f196b43d3" />
+- **Credit what you borrow.** The DCGAN's generator and discriminator are a public implementation reproduced nearly verbatim, and the latent-optimization score is AnoGAN's method, yet the write-up introduces the architecture as "our model" and cites neither. Both are fine to use. Using them without saying so is the one thing in this repository that a reader must not learn from. The credit now appears under [Method](#method).
+- **Report the numbers your code produced.** The write-up's autoencoder table doesn't match the committed notebook, whose final report has a different threshold and reverses precision and recall. One sentence says 81 percent accuracy and the table under it says 0.76. The GAN's stated accuracy of 0.8933 doesn't follow from its own confusion matrix, which gives 0.888, and its stated recall of 0.8583 is 0.85 in the notebook. Small gaps, but a reader who tries to reproduce the table can't.
+- **Compare on the same footing.** The autoencoder ran at 256×256, the VAE and GAN at 64×64, the Vision Transformer at 224×224. The GAN was scored on a balanced 760-image set and the others on the 400-image test set. The ranking may well hold, but the table doesn't establish it.
+- **Say who did what.** No author is named anywhere in the write-up, and the fourth member exists only in a commit message.
+- **Keep one copy of each notebook.** Two notebooks were byte-for-byte identical, a third is an earlier version of the fourth, an early VAE attempt that classifies everything as normal is still named "Final Project", and the notebooks carry 53 MB of outputs.
 
-Where we miss the mark are shape defects, which in our analysis are less risky to the business.
+What the project does well: a leak-free split that respects the four rotations of each biscuit; a baseline, a Bayesian model and two alternatives on the same question; a threshold chosen on validation data; an error analysis that weighs the cost of each kind of mistake, where a screw matters more than a dent; a second question, which defects are tolerable, answered with the latent space; and a failed experiment written up with the right diagnosis instead of dropped.
 
-**False Negative Images:**
+## About this project
 
-<img width="1513" alt="Screenshot 2025-05-28 at 1 14 39 PM" src="https://github.com/user-attachments/assets/90998107-698f-4a6b-b64f-0caefe8f6f8f" />
+This project was built in Bayesian Machine Learning with Generative AI Applications (ADSP 32014), part of the Master of Science in Applied Data Science at the University of Chicago, in Spring 2025. It is shown here as an example for later cohorts.
 
-This is a promising start, with the autoencoder but we now move forward to building out a latent space for these images with a VAE.
+## Changes by course staff
 
-### **Variational Autoencoder (VAE)**
+Course staff forked the authors' repository and made these edits. The authors' notebooks are unchanged.
 
-We also tested the Variational Autoencoder (VAE) for binary classification of the cookies: defect vs non-defect. VAE is trained on the "normal" (non-defective) biscuit images and uses that to learn a latent representation. Anomalies are then identified by measuring the reconstruction error of test samples – if the error exceeds a certain threshold, it would be considered an anomaly
+- Renamed the authors' README to `REPORT.md`, unchanged, and added this README with the program banner, including the credits to PyTorch-GAN and AnoGAN that the write-up lacks.
+- Removed `EDA, VAE, and Clustering.ipynb`, which was byte-for-byte identical to `EDA and VAE.ipynb`.
+- Added a `.gitignore` for data and model files.
 
-* The VAE consists of an encoder and a decoder network. Below is the configuration of our architecture:
+## License
 
-```python
-from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Lambda, Reshape, Conv2DTranspose
-from tensorflow.keras import backend as K
-
-# Input: Images of size (64, 64, 3)
-encoder_input = Input(shape=(64, 64, 3))
-x = Conv2D(32, (3, 3), activation='relu', padding='same')(encoder_input)
-x = Conv2D(64, (3, 3), activation='relu', strides=(2, 2), padding='same')(x)
-x = Conv2D(128, (3, 3), activation='relu', strides=(2, 2), padding='same')(x)
-x = Flatten()(x)
-x = Dense(64, activation='relu')(x)
-
-# Latent space parameters
-z_mean = Dense(latent_dim, name='z_mean')(x)
-z_log_var = Dense(latent_dim, name='z_log_var')(x)
-
-# Sampling Layer (Reparameterization Trick)
-# z = mu + sigma * epsilon, where epsilon ~ N(0, I)
-def sampling(args):
-    z_mean, z_log_var = args
-    epsilon = K.random_normal(shape=(K.shape(z_mean)[0], latent_dim), mean=0., stddev=1.)
-    return z_mean + K.exp(z_log_var / 2) * epsilon
-
-z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
-
-# Decoder Architecture
-# Input: Sampled latent vector z of size (latent_dim,)
-decoder_input = Input(shape=(latent_dim,))
-x = Dense(8 * 8 * 128, activation='relu')(decoder_input)
-x = Reshape((8, 8, 128))(x)
-x = Conv2DTranspose(128, (3, 3), activation='relu', padding='same')(x)
-x = Conv2DTranspose(64, (3, 3), activation='relu', strides=(2, 2), padding='same')(x)
-x = Conv2DTranspose(32, (3, 3), activation='relu', strides=(2, 2), padding='same')(x)
-decoder_output = Conv2D(3, (3, 3), activation='sigmoid', padding='same')(x)
-```
-
-
-* Loss Function: The VAE loss function combines two components
-
-    1.  Reconstruction Loss: Measures how well the VAE reconstructs the input image. We use binary cross-entropy, which is suitable for images normalized to $[0,1]$.
-        $$L_{\text{reconstruction}} = -\sum_{i} (x_i \log(\hat{x}_i) + (1-x_i) \log(1-\hat{x}_i))$$
-
-    2.  KL Divergence Loss: Regularizes the latent space by forcing the learned distribution to be close to a standard normal distribution. This ensures a continuous and well-structured latent space, preventing overfitting and encouraging meaningful latent representations.
-        $$L_{\text{KL}} = -0.5 \sum_{i} (1 + \log(\sigma_i^2) - \mu_i^2 - \sigma_i^2)$$
-
-    The total VAE loss is the sum of these two components.
-
-##### Training Process: 
-* As mentioned, VAE is trained exclusively on non-defective cookie images (`X_train_ok`). The model learns to encode these images into a latent space and then decode them back to their original form. During training, the reconstruction error is minimized, and the latent space is regularized. 
-* Optimal Parameters: The model is compiled with the Adam optimizer and trained the model for `50` epochs with a `batch_size` of `32`.
-
-#### VAE Results and Analysis
-
-##### Reconstruction Visualization
-
-After training, the VAE's ability to reconstruct images was evaluated. The model was able to reconstruct non-defective cookie images. For defective images however, we see some flaws in the reconstruction as the model attempts to reconstruct them as non-defective cookies.
-
-<img width="902" alt="Screenshot 2025-05-28 at 1 20 01 PM" src="https://github.com/user-attachments/assets/94fafb4d-eb1f-4d00-bb46-588132bfdbed" />
-
-
-##### Anomaly Detection Thresholding
-
-We set the optimal threshold for the Anomaly detection by selecting the threshold that obtains the F1-Score on the validation set. We further tuned the threshold to achieve the optimal anomaly detection performance based on using standard metrics including accuracy, precision, recall, and F1-score.
-
-* Optimal Threshold: 0.5047  
-* Results on Test Set:   
-  * Accuracy: 0.79  
-  * Precision: 0.72  
-  * Recall: 0.95  
-  * F1-Score: 0.82
-
-##### Clustering Defective Images
-
-In addition to the simple binary defect detection, we decided to further explore and understand the different types of defects. From the dataset source, we were informed that there were 3 different types of defects: not complete, strange object  and color defect. This task is important from a business standpoint since certain defects could still be acceptable (i.e. hape defects) which could still be sold to customers compared to other defects which could be detrimental to the business if sold to customers (i.e. unknown objects or coloring in the cookies). To identify the different defects, we applied K-Means clustering on the latent space representations of the predicted defects from the test samples (K=3). We obtained the following distribution:
-
-* Cluster 0: 76 images  
-* Cluster 1: 76 images  
-* Cluster 2: 48 images
-
-Visualization on a 2D plot shows that Cluster 2 is very distinct, while Cluster 0 and Cluster 1 were less distinguishable.
-
-<img width="650" alt="Screenshot 2025-05-28 at 1 20 39 PM" src="https://github.com/user-attachments/assets/21486a43-7307-4475-a0e5-ad2f05e1ef12" />
-
-
-After further examination we see that Cluster 2 actually corresponds to cookies that have shape defects. In fact, we see that out of 48 cookies in Cluster 2, 44 are shape defects and the other 4 are color defects. This shows a promising result that we were able to identify the difference between “acceptable” defects vs unsellable defects.
-
-*Original Cookie Images in Cluster 2 (Shape Defects -- "Acceptable")*
-
-<img width="1176" alt="Screenshot 2025-05-28 at 1 20 53 PM" src="https://github.com/user-attachments/assets/50a00854-8988-485f-94cc-f04cf95ac563" />
-
-
-##### VAE on Defects Only
-
-In attempts to explore the possibility of obtaining a better clustering result on the defective cookies, we experiment by training a separate VAE model exclusively on the defective images. The motivation behind this was to explore if a VAE trained specifically on defects could learn a better latent space for classifying different defect types. However, our results indicated that this approach did not yield a better result for defect type classification. Our conclusion from this was that while it was able to build a good latent space for defect type reconstruction, it didn't work as effectively for defect classification.
-
-### **Vision Transformer (ViT) VAE**
-
-To push the boundaries of representation learning, we experimented with a Vision Transformer-based Variational Autoencoder (ViT-VAE). The core idea is to leverage the pretrained representational power of a Vision Transformer (ViT) to encode visual features more robustly than traditional CNN encoders. This approach uses a pretrained ViT-Base model as the encoder and a transposed convolutional network as the decoder to reconstruct the input image from a sampled latent space.
-
-#### ViT-VAE Architecture
-
-* **Encoder**: We use the ViT-Base (google/vit-base-patch16-224) pretrained model from Hugging Face Transformers.   
-  * This is an encoder only ViT.  
-  * The \[CLS\] token is excluded, and only the patch embeddings are used.   
-  * These are reshaped into a 2D feature map and passed through a final convolutional layer to output mean and log-variance vectors for the latent space.
-
-* **Latent Space**: The VAE latent space follows the standard Gaussian reparameterization trick:  
-$z = \mu + \sigma \cdot \epsilon \quad \text{where} \quad \epsilon \sim \mathcal{N}(0, I)$
-
-* **Decoder**: A 4-layer transposed convolutional decoder reconstructs the image from the latent vector z. Batch normalization and ReLU activations are applied in intermediate layers.
-
-* **Loss Function**: Combines reconstruction loss (binary cross-entropy) and KL divergence.
-
-```python
-class ViTVAE(nn.Module):
-
-    def __init__(self, img_size, nb_channels, latent_img_size, z_dim, rec_loss="xent", beta=1, delta=1):
-        super(ViTVAE, self).__init__()
-
-        self.img_size = img_size
-        self.nb_channels = nb_channels
-        self.latent_img_size = latent_img_size
-        self.z_dim = z_dim
-        self.beta = beta
-        self.rec_loss = rec_loss
-        self.delta = delta
-        self.nb_conv = 3
-        self.max_depth_conv = 384
-
-        # Load pretrained ViT
-        self.vit = ViTModel.from_pretrained('google/vit-base-patch16-224')
-
-        # Optional: freeze ViT if needed
-        # for param in self.vit.parameters():
-        #     param.requires_grad = False
-
-        self.out_en = nn.Sequential(
-            nn.Conv2d(3, 512, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU()
-        )
-
-        # Decoder setup
-        self.decoder_layers = []
-        for i in reversed(range(1, 5)):
-            depth_in = 3 * 2 ** (2 + i + 1)
-            depth_out = 3 * 2 ** (2 + i)
-            if i == 1:
-                depth_out = self.nb_channels
-                self.decoder_layers.append(
-                    nn.ConvTranspose2d(depth_in, depth_out, 4, 2, 1)
-                )
-            else:
-                self.decoder_layers.append(nn.Sequential(
-                    nn.ConvTranspose2d(depth_in, depth_out, 4, 2, 1),
-                    nn.BatchNorm2d(depth_out),
-                    nn.ReLU()
-                ))
-
-        self.conv_decoder = nn.Sequential(*self.decoder_layers)
-
-    def encoder(self, x):
-        x = self.vit(x)[0][:, 1:, :]  # skip [CLS] token
-        x = x.permute(0, 2, 1)        # (B, hidden_dim, patch_count)
-        x = x.reshape(x.shape[0], x.shape[1], 14, 14)
-        return x[:, :self.z_dim], x[:, self.z_dim:]
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = torch.exp(0.5 * logvar)
-            eps = torch.randn_like(std)
-            return eps * std + mu
-        else:
-            return mu
-
-    def decoder(self, z):
-        x = self.conv_decoder(z)
-        x = torch.sigmoid(x)
-        return x
-
-    def forward(self, x):
-        mu, logvar = self.encoder(x)
-        z = self.reparameterize(mu, logvar)
-        self.mu = mu
-        self.logvar = logvar
-        return self.decoder(z), (mu, logvar)
-```
-
-#### Training Details
-
-* Input Size: 224×224×3 (resized from 256×256)  
-* Latent Dimension (z\_dim): 384
-* Training Epochs: 100  
-* Batch Size: 32  
-* Optimization: Adam optimizer  
-* KL Divergence Weight (β): 1.0
-
-![image](https://github.com/user-attachments/assets/9fa1e7c8-ee02-422a-9f3b-b67820c81ebd)
-
-
-#### ViT-VAE Results and Analysis
-
-Despite the architectural sophistication and excellent reconstructions, the ViT-VAE showed poor test set classification performance. **One likely cause is that the pretrained ViT encoder was too good at reconstructing even defective images, including those with nails or unusual coloring**. This means that even anomalies were reconstructed well, leading to low reconstruction error and consequently poor anomaly discrimination.
-
-1. Threshold Tuning (based on validation set reconstruction error):
-
-* Best Threshold: 70,077.57  
-* Validation Set Performance:  
-  * Precision: **0.5000**  
-  * Recall: 1.0000  
-  * F1 Score: 0.6667  
-  * AUC: 0.5058
-
-2. Test Set Performance:
-
-* Precision: **0.4898**  
-* Recall: 0.9600  
-* F1 Score: 0.6486  
-* AUC: 0.6091
-
-3. Reconstruction Performance:
-
-![image](https://github.com/user-attachments/assets/7f8c1145-42e0-4de5-a759-0b4c9eb58ba1)
-
- *Figure: ViT-VAE reconstructions on test set. Even severe anomalies are reconstructed clearly.*
-
-#### Latent Space Analysis
-
-The t-SNE visualization of the latent space reveals slightly distinct but overlapping clusters for defective and non-defective samples. **Defective cookies tend to reside near the boundary of the normal cluster, which confirms that the latent space does learn some distinction**. However, the boundaries are not sharp, possibly due to the ViT encoder’s generalization ability, causing defective features to be encoded similarly to normal ones.
-
-
-
-![image](https://github.com/user-attachments/assets/ff970b91-392f-4359-9e0f-7d0fbea9c82b)
-
- *Figure: t-SNE visualization of ViT-VAE latent space. Anomalies (red) are loosely grouped near normal samples (green).*
-
-#### Conclusion
-
-While the ViT-VAE demonstrates strong reconstructive capabilities and potential for rich feature extraction, its overly smart encoder and expressive decoder limits its effectiveness in anomaly detection. This model contributes to our understanding of the tradeoff between representational quality and anomaly separability in latent spaces learned via deep generative models.
-
-### **Generative Adversarial Network (GAN)**
-
-We also trained a Deep Convolutional Generative Adversarial Network (DCGAN) to identify anomalous biscuits. 
-Architecture: DCGAN consists of a Generator and a Discriminator network and our model has the following architecture:
-
-```python
-class Generator(nn.Module):
-    def __init__(self, latent_dim=100, img_size=64, channels=3):
-        super(Generator, self).__init__()
-        self.init_size = img_size // 4
-        self.l1 = nn.Sequential(nn.Linear(latent_dim, 128 * self.init_size ** 2))
-
-        self.conv_blocks = nn.Sequential(
-            nn.BatchNorm2d(128),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(128, 128, 3, stride=1, padding=1),
-            nn.BatchNorm2d(128, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(128, 64, 3, stride=1, padding=1),
-            nn.BatchNorm2d(64, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, channels, 3, stride=1, padding=1),
-            nn.Tanh()
-        )
-
-    def forward(self, z):
-        out = self.l1(z)
-        out = out.view(out.shape[0], 128, self.init_size, self.init_size)
-        img = self.conv_blocks(out)
-        return img
-
-
-
-class Discriminator(nn.Module):
-    def __init__(self, img_size=64, channels=3):
-        super(Discriminator, self).__init__()
-
-        def discriminator_block(in_filters, out_filters, bn=True):
-            block = [
-                nn.Conv2d(in_filters, out_filters, 3, 2, 1),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Dropout2d(0.25)
-            ]
-            if bn:
-                block.append(nn.BatchNorm2d(out_filters, 0.8))
-            return block
-
-        self.model = nn.Sequential(
-            *discriminator_block(channels, 16, bn=False),
-            *discriminator_block(16, 32),
-            *discriminator_block(32, 64),
-            *discriminator_block(64, 128)
-        )
-
-        ds_size = img_size // 2 ** 4
-        self.adv_layer = nn.Sequential(nn.Linear(128 * ds_size ** 2, 1), nn.Sigmoid())
-
-    def forward(self, img):
-        out = self.model(img)
-        out = out.view(out.shape[0], -1)
-        validity = self.adv_layer(out)
-        return validity
-```
-
-#### Training Process: 
-The GAN is trained iteratively, alternating between updating the Discriminator and the Generator. Similar to other models we train the DCGAN model on normal biscuits and find which images have high reconstruction errors. 
-* Discriminator Training: The Discriminator is trained to distinguish between real images (from the dataset) and fake images (generated by the Generator). It aims to output a high probability for real images and a low probability for fake images.
-* Generator Training: The Generator is trained to produce images that can fool the Discriminator. Its loss function combines the adversarial loss (how well it fools the discriminator) and the feature loss (how similar its generated images are to real images in terms of extracted features).
-* Optimizers: Both the Generator and Discriminator are optimized using Adam with a learning rate of 0.0002 and betas (0.5, 0.999).
-* Epochs: The model is trained for 100 epochs.
-
-#### DCGAN Results and Anomaly Detection
-Anomaly detection using the DCGAN is performed by evaluating the reconstruction error. The generator, trained only on normal biscuits, struggles to perfectly reconstruct anomalous images.
-
-* Optimal Threshold: By leveraging Youden’s J statistic, an optimal threshold of 0.0468 was determined for anomaly detection.
-
-* Results on Test Set: Using the optimal threshold, the DCGAN achieved the following performance on the test set:
-   * Accuracy: 0.8933
-   * Precision (Anomaly): 0.9200
-   * Recall (Anomaly): 0.8583
-   * F1-Score (Anomaly): 0.8889
-
-We see below what the reconstruction errors looks like for normal vs anomalous cookies: 
-
-![image](https://github.com/user-attachments/assets/acc34772-7af4-4a0c-8046-72c6d42a3e39)
-
-* Confusion Matrix
-
-<img width="450" alt="Screenshot 2025-05-28 at 1 21 35 PM" src="https://github.com/user-attachments/assets/26e2c5f2-e1fa-48d3-b633-c706071d0d2e" />
-
-
-## Final Model and Results
-
-Given our results, our best model for identifying anomalies is the DCGAN. The overall accuracy of the model is the best of the group and it also does a great job in terms of recall of anomalies (85%). The GAN is able to give sharper, more realistic images which allows it to see some of the fine grain details. Models like VAE and autoencoder struggled to identify shape defects for example, whereas DCGAN was able to capture more of these without giving up precision. A DCGAN is also less likely to explain away any anomalies by reconstructing them well.
-
-From a business perspective we are striving to minimize false negatives because they represent a large risk to the companies success. When we look at some of the color defects or cookies with metal items in them, if served this could result in a lawsuit. On the positive, all models do a good job of capturing these major red flags. But models like autoencoder and VAE, may result in more false positives which means wasted cookies. DCGAN outperforms in terms of precision and recall meaning we are avoiding risk of serving bad cookies while also producing enough cookies for the business to be successful.
-
-## Future Work
-
-* **Achieving Production Readiness:** To successfully deploy such a model in a real industrial setting, we must achieve significantly improved metrics, particularly higher accuracy and precision, ideally striving for 100% to minimize the risk of false negatives. This will involve further model refinement and rigorous testing under diverse real-world conditions.  
-* **Expanding Scope and Generalizability to other Fields:** Our anomaly detection approach is highly adaptable and can be applied beyond the cookie industry. We aim to explore its use in other fields, such as medical imaging analysis, where identifying anomalies (e.g., tumors or abnormalities in X-rays or MRI scans) is crucial for diagnosis and treatment.
+The authors have not added a license, so their work is shown here under GitHub's terms for public repositories. Ask them before reusing it. The DCGAN code inside it is MIT licensed by its original author.
